@@ -17,6 +17,16 @@ from .servicio import Servicio
 
 _estado: dict = {}
 
+PAGINA_MCP = """<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Conector Marketificial</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.6 system-ui,sans-serif;
+background:#f7f7f9;color:#14161a;padding:16px}main{max-width:560px;background:#fff;border:1px solid #e3e5ea;
+border-radius:10px;padding:28px}h1{font-size:22px;margin:0 0 8px}code{background:#f1f2f5;padding:1px 5px;border-radius:4px}</style>
+</head><body><main><h1>Conector Marketificial para Claude</h1>
+<p>Esta dirección no se abre en el navegador: es la entrada que usa Claude para hablar con el conector.</p>
+<p>Para usarla, añádela en Claude como <b>conector personalizado</b>, copiando la URL completa (con <code>?token=…</code>).</p>
+<p>Para conectar cuentas de clientes, entra en el <a href="/panel">panel</a>.</p></main></body></html>""".encode()
+
 
 def servicio() -> Servicio:
     return _estado["svc"]
@@ -29,6 +39,14 @@ class AuthMCP:
         self.app, self.token_fn = app, token_fn
 
     async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/mcp") and scope["method"] == "GET":
+            cab = dict(scope.get("headers") or [])
+            if b"text/html" in cab.get(b"accept", b""):
+                await send({"type": "http.response.start", "status": 200,
+                            "headers": [(b"content-type", b"text/html; charset=utf-8"),
+                                        (b"cache-control", b"no-store"), (b"referrer-policy", b"no-referrer")]})
+                await send({"type": "http.response.body", "body": PAGINA_MCP})
+                return
         if scope["type"] == "http" and scope["path"].startswith("/mcp"):
             esperado = self.token_fn()
             cab = dict(scope.get("headers") or [])

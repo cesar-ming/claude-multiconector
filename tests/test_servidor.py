@@ -77,3 +77,9 @@ def test_mcp_lista_herramientas_y_llama(cliente):
     # token por parámetro de URL (para conectores que no permiten cabeceras)
     r = cliente.post("/mcp?token=tok", headers=MCP_CAB, json={"jsonrpc": "2.0", "id": 5, "method": "tools/list"})
     assert r.status_code == 200
+
+
+def test_mcp_en_navegador_muestra_pagina(cliente):
+    r = cliente.get("/mcp?token=cualquiera", headers={"Accept": "text/html,application/xhtml+xml"})
+    assert r.status_code == 200 and "conector personalizado" in r.text
+    assert "tok" not in r.text
