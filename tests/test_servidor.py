@@ -82,4 +82,4 @@ def test_mcp_lista_herramientas_y_llama(cliente):
 def test_mcp_en_navegador_muestra_pagina(cliente):
     r = cliente.get("/mcp?token=cualquiera", headers={"Accept": "text/html,application/xhtml+xml"})
     assert r.status_code == 200 and "conector personalizado" in r.text
-    assert "tok" not in r.text
+    assert "cualquiera" not in r.text  # nunca repite el token recibido
