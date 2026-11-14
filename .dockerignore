@@ -1,7 +1,10 @@
-node_modules
-dist
 .git
 .github
 .env
-*.log
-test
+datos
+copias
+tests
+docs
+deploy
+__pycache__
+*.pyc

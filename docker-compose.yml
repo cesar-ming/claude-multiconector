@@ -1,0 +1,10 @@
+# Para pruebas en local. En el servidor de Clouding el docker-compose.yml lo gestiona deploy/clouding/migrar.sh.
+services:
+  conector:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./datos:/srv/datos
+    ports:
+      - "127.0.0.1:8080:8080"

@@ -1,230 +1,117 @@
-# Multiconector MCP para Claude
+# Conector Marketificial
 
-[![CI](https://github.com/cesar-ming/claude-multiconector/actions/workflows/ci.yml/badge.svg)](https://github.com/cesar-ming/claude-multiconector/actions/workflows/ci.yml)
+Un único servicio que conecta **Meta Ads, Google Ads, LinkedIn Ads, TikTok Ads, Página de Facebook, Instagram, TikTok, LinkedIn, Shopify y WordPress**, y los expone de dos formas:
 
-Servidor [MCP](https://modelcontextprotocol.io) que conecta Claude con **Google Ads, Meta Ads, LinkedIn Ads, TikTok Ads, Facebook, Instagram, LinkedIn, TikTok, Shopify y WordPress** desde un único conector.
+- **Servidor MCP** (`/mcp`), para que Claude y los agentes de Marketificial lean datos, publiquen y gestionen campañas.
+- **API REST** (`/api/...`) y un **panel web** (`/panel`), para conectar cuentas y para la futura plataforma de autoservicio.
 
-Con él puedes pedirle a Claude cosas como:
+Está pensado para que **la agencia** conecte las cuentas de sus clientes con sus propios accesos.
 
-- «¿Cuánto he gastado esta semana en todas las plataformas y cuál tiene mejor CPA?»
-- «Compara las ventas de Shopify por fuente UTM con la inversión en Google y Meta de octubre.»
-- «¿Qué posts de Instagram y TikTok del último mes tuvieron más engagement?»
-- «Pausa la campaña 123 de Google Ads» (solo con escrituras activadas y tu confirmación).
-- «Redacta un borrador en WordPress con el artículo que acabamos de escribir.»
+## Qué hace cada plataforma
 
-## Instalación (menos de 5 minutos)
-
-Requisitos: Node.js 20 o superior.
-
-```bash
-git clone https://github.com/cesar-ming/claude-multiconector.git
-cd claude-multiconector
-npm install
-npm run build
-```
-
-### Claude Desktop
-
-Edita `claude_desktop_config.json` (Ajustes → Desarrollador → Editar configuración) y añade el bloque de
-[`claude_desktop_config.example.json`](claude_desktop_config.example.json) con la ruta absoluta a `dist/index.js`
-y solo las credenciales de las plataformas que uses. Reinicia Claude.
-
-### Claude Code
-
-```bash
-claude mcp add multiconector \
-  -e META_ACCESS_TOKEN=... -e SHOPIFY_SHOP_DOMAIN=mitienda.myshopify.com -e SHOPIFY_ACCESS_TOKEN=... \
-  -- node /ruta/absoluta/claude-multiconector/dist/index.js
-```
-
-Después pregunta a Claude «estado de los conectores» (herramienta `connectors_status`) para ver qué está activo.
-
-## Modo remoto: claude.ai, app del iPhone y Android
-
-En modo HTTP el multiconector se despliega en un servidor y se añade a claude.ai como **conector personalizado**.
-Una vez añadido en la web, aparece también en las apps de Claude para iPhone, Android y escritorio.
-
-```
-Claude (web / iPhone / escritorio) ──OAuth──▶  https://tu-servidor/mcp  ──▶  Google, Meta, LinkedIn, TikTok, Shopify, WordPress
-```
-
-### Seguridad del modo remoto
-
-- **OAuth 2.1 con PKCE y registro dinámico de clientes**, que es lo que usa claude.ai. Al conectar, se abre una página
-  donde introduces tu contraseña de propietario (`MCP_OWNER_PASSWORD`); solo entonces Claude recibe un token.
-- **Sin base de datos**: clientes, códigos y tokens van cifrados y firmados con AES-256-GCM (clave derivada de
-  `MCP_TOKEN_SECRET`). Sobrevive a reinicios y a escalado a cero. Tokens de acceso de 1 hora y de refresco de 30 días.
-- **Revocar todo**: cambia `MCP_OWNER_PASSWORD` o `MCP_TOKEN_SECRET` y todos los tokens emitidos dejan de valer.
-- **Clave de API opcional** (`MCP_API_KEY`) para Claude Code o scripts que envían la cabecera `Authorization: Bearer`.
-- El servidor **no arranca sin autenticación**, exige HTTPS en `MCP_PUBLIC_URL`, secretos de longitud mínima y limita
-  los intentos de contraseña (10 cada 15 minutos por IP).
-
-### Variables del modo remoto
-
-| Variable | Obligatoria | Descripción |
+| Plataforma | Leer | Publicar / gestionar |
 |---|---|---|
-| `MCP_TRANSPORT=http` | sí (o `--http`) | Activa el modo HTTP. La imagen Docker ya lo trae activado. |
-| `MCP_PUBLIC_URL` | para OAuth | URL pública del servicio, p. ej. `https://multiconector-xxxx.run.app` |
-| `MCP_OWNER_PASSWORD` | para OAuth | Tu contraseña para autorizar a Claude (mínimo 12 caracteres). |
-| `MCP_TOKEN_SECRET` | para OAuth | Secreto aleatorio de 32+ caracteres: `openssl rand -base64 48` |
-| `MCP_API_KEY` | opcional | Clave para clientes con cabeceras (32+ caracteres). |
-| `PORT` | no | Puerto (por defecto 8080). |
-| `MCP_TRUST_PROXY` | no | Saltos de proxy de confianza (por defecto 1, correcto en Cloud Run, Railway y Render). |
+| Meta Ads | Inversión, impresiones, clics, conversiones e ingresos por campaña, conjunto o anuncio y día | Pausar/activar · cambiar presupuesto diario |
+| Google Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
+| LinkedIn Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
+| TikTok Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
+| Página de Facebook | Métricas diarias de la página · publicaciones | Publicar o programar post (texto, enlace o imagen) |
+| Instagram | Alcance, seguidores, visualizaciones, interacciones · publicaciones | Publicar imagen, reel o carrusel |
+| TikTok | Foto actual de la cuenta y métricas por vídeo | Publicar vídeo desde URL |
+| LinkedIn | Estadísticas diarias de la página y seguidores · posts | Publicar post (texto, enlace o imagen) |
+| Shopify | Pedidos y ventas por día (zona horaria de la tienda) · productos | Cambiar estado de producto · crear producto en borrador |
+| WordPress | Entradas publicadas por día · entradas | Crear entrada (borrador por defecto) · actualizar entrada |
 
-Más las credenciales de cada plataforma, igual que en modo local.
+Todas las métricas de publicidad salen con el mismo formato:
+`fecha, plataforma, cuenta_id, campana_id, campana, inversion, impresiones, clics, conversiones, ingresos, moneda`.
 
-### Desplegar en Google Cloud Run
+## Salvaguardas
 
-```bash
-# 1. Guarda los secretos en Secret Manager (una vez)
-printf '%s' 'tu-contraseña-larga' | gcloud secrets create mc-owner-password --data-file=-
-openssl rand -base64 48 | tr -d '\n' | gcloud secrets create mc-token-secret --data-file=-
-printf '%s' 'EAAB...' | gcloud secrets create mc-meta-token --data-file=-   # y así con cada credencial
+- **Nada se publica ni se cambia en un paso.** `proponer_accion` consulta el estado actual y devuelve una vista previa con un token; solo `confirmar_accion` ejecuta. El token caduca a los 30 minutos y sirve una sola vez.
+- **Interruptores generales**: `PERMITIR_PUBLICAR` y `PERMITIR_GESTIONAR` vienen desactivados.
+- **Topes de presupuesto**: una acción no puede subir un presupuesto más de `MAX_SUBIDA_PRESUPUESTO_PCT` (50 %) ni superar `MAX_PRESUPUESTO_DIARIO` (500).
+- **Comprobación de pertenencia**: no se puede tocar una campaña de otra cuenta.
+- **Credenciales cifradas** en la base de datos (Fernet) y **registro de auditoría** de cada conexión, propuesta y ejecución, sin tokens ni secretos.
+- **Sin datos inventados**: si una métrica no existe o una fuente falla, se devuelve el error o «sin dato», nunca una estimación. Los ingresos atribuidos de cada plataforma no se suman entre sí, y el MER solo se calcula si todas las fuentes responden y comparten moneda.
 
-# 2. Calcula la URL que tendrá el servicio (Cloud Run la forma con el número de proyecto)
-REGION=europe-west1
-PROJECT_NUMBER=$(gcloud projects describe "$(gcloud config get-value project)" --format='value(projectNumber)')
-URL="https://claude-multiconector-${PROJECT_NUMBER}.${REGION}.run.app"
+## Puesta en marcha en el servidor de Clouding (marketificial-mvp)
 
-# 3. Despliega desde el código (Cloud Build usa el Dockerfile)
-gcloud run deploy claude-multiconector --source . --region "$REGION" \
-  --allow-unauthenticated \
-  --set-env-vars MCP_PUBLIC_URL="$URL" \
-  --set-secrets MCP_OWNER_PASSWORD=mc-owner-password:latest,MCP_TOKEN_SECRET=mc-token-secret:latest,META_ACCESS_TOKEN=mc-meta-token:latest
-```
+El servidor ya tiene Caddy (HTTPS automático) y un temporizador que **cada 5 minutos descarga la rama `main` de este repositorio** y reconstruye el contenedor si hay cambios. Publicar una mejora es tan simple como subirla a `main`.
 
-Si `gcloud` muestra al final una URL distinta de `$URL` (formato antiguo `...-xxxx-ew.a.run.app`), actualiza la variable:
-`gcloud run services update claude-multiconector --region "$REGION" --update-env-vars MCP_PUBLIC_URL=https://...`
-
-La cuenta de servicio de Cloud Run necesita el rol *Secret Manager Secret Accessor* sobre esos secretos (gcloud lo
-ofrece la primera vez). `--allow-unauthenticated` es necesario porque la autenticación la hace el propio servidor con OAuth. Railway, Render
-o Fly.io funcionan igual: despliegan el `Dockerfile` y solo hay que definir las mismas variables.
-
-Comprueba que responde: `https://tu-servidor/healthz` debe devolver `{"ok":true,"oauth":true,...}`.
-
-### Añadirlo a Claude
-
-**claude.ai (y desde ahí, el iPhone):** Ajustes → Conectores → *Añadir conector personalizado* → URL
-`https://tu-servidor/mcp` → *Conectar*. Se abrirá la página de autorización: introduce tu `MCP_OWNER_PASSWORD`. Después
-el conector está disponible en la app del iPhone con la misma cuenta. (Los conectores personalizados dependen del plan
-de Claude; en cuentas de equipo puede tener que añadirlo un administrador.)
-
-**Claude Code con clave de API:**
+Migración inicial, una sola vez, desde la consola del servidor como `root`:
 
 ```bash
-claude mcp add --transport http multiconector https://tu-servidor/mcp --header "Authorization: Bearer $MCP_API_KEY"
+nano /opt/marketificial/github-token     # pega un token de GitHub de solo lectura (Contents: Read-only) y guarda
+chmod 600 /opt/marketificial/github-token
+curl -fsSL -H "Authorization: token $(cat /opt/marketificial/github-token)" \
+  https://raw.githubusercontent.com/cesar-ming/claude-multiconector/main/deploy/clouding/migrar.sh | bash
+cat /root/marketificial-credenciales.txt  # clave del panel y URL del conector para Claude
 ```
 
-**Probarlo en local:**
+[`deploy/clouding/migrar.sh`](deploy/clouding/migrar.sh) genera los secretos en el propio servidor, añade almacenamiento permanente para la base de datos, programa una copia diaria (30 días) y arranca el conector en `https://mcp.marketificial.com`. Se puede repetir sin perder nada. Guarda `CLAVE_CIFRADO` también fuera del servidor: sin ella no se pueden leer las credenciales guardadas.
+
+Las claves de las apps de cada plataforma se añaden en `/opt/marketificial/.env`; después, `cd /opt/marketificial && docker compose up -d multiconector`. Comprueba qué falta con `docker compose exec multiconector python -m app.cli comprobar`, que también muestra las URL de redirección que hay que registrar en cada app.
+
+Para otro servidor, sirven el `Dockerfile` y `docker-compose.yml` de la raíz detrás de cualquier proxy con HTTPS.
+
+## Conectar las cuentas
+
+1. Da de alta las apps de cada plataforma siguiendo **[docs/ALTA-APPS.md](docs/ALTA-APPS.md)** y pon sus claves en `.env`.
+2. Entra en `https://mcp.marketificial.com/panel` con tu `API_KEY`.
+3. Pulsa «Conectar» en cada plataforma y autoriza con tu usuario de la agencia.
+4. Marca las cuentas que quieres usar y escribe el cliente (`echaleku`, `joselito`…).
+
+WordPress y, si quieres, Meta (con token de usuario del sistema) y Shopify (con client ID y secret) se conectan con «credenciales manuales» desde el mismo panel. No pegues contraseñas ni tokens en un chat: usa siempre el panel.
+
+## Usarlo desde Claude
+
+Añade un conector personalizado con esta URL:
+
+```
+https://mcp.marketificial.com/mcp?token=TU_MCP_TOKEN
+```
+
+En Claude Code también puedes mandar el token en cabecera:
 
 ```bash
-MCP_API_KEY=$(openssl rand -hex 24) META_ACCESS_TOKEN=... npm run build && node dist/index.js --http
+claude mcp add --transport http marketificial https://mcp.marketificial.com/mcp \
+  --header "Authorization: Bearer TU_MCP_TOKEN"
 ```
 
-## Conectores y herramientas
+Herramientas: `plataformas`, `conexiones`, `metricas`, `resumen_cliente`, `contenido`, `proponer_accion`, `confirmar_accion`, `cancelar_accion`, `enlace_para_conectar`, `cuentas_disponibles`, `vincular_cuenta` y `auditoria`.
 
-Cada conector se activa solo si están sus variables de entorno (ver [`.env.example`](.env.example)). Las herramientas de
-los conectores sin credenciales no aparecen, así Claude no ve herramientas que no puede usar.
+Ejemplos de uso: «¿Cuánto hemos invertido en Echaleku este mes y cuál es el MER?», «Pausa la campaña de prospección de Meta de Echaleku», «Publica este carrusel en el Instagram de Joselito». Claude te enseñará la vista previa y esperará tu «sí» antes de ejecutar.
 
-| Plataforma | Variables obligatorias | Lectura | Escritura (requiere `MCP_ALLOW_WRITES=true`) |
-|---|---|---|---|
-| **Todas** | — | `connectors_status`, `ads_cross_platform_summary` | — |
-| **Google Ads** | `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN` | `google_ads_list_accounts`, `google_ads_campaign_performance`, `google_ads_query` (GAQL solo SELECT) | `google_ads_set_campaign_status` |
-| **Meta Ads** | `META_ACCESS_TOKEN` | `meta_ads_list_accounts`, `meta_ads_list_campaigns`, `meta_ads_performance` (cuenta/campaña/conjunto/anuncio, desgloses) | `meta_ads_set_status` |
-| **Facebook** | `META_ACCESS_TOKEN` | `facebook_list_pages`, `facebook_page_posts`, `facebook_page_insights` | `facebook_publish_post` (publicar o programar) |
-| **Instagram** | `META_ACCESS_TOKEN` | `instagram_account_info`, `instagram_list_media`, `instagram_media_insights`, `instagram_account_insights` | `instagram_publish` (imagen o reel) |
-| **LinkedIn Ads** | `LINKEDIN_ACCESS_TOKEN` | `linkedin_ads_list_accounts`, `linkedin_ads_list_campaigns`, `linkedin_ads_performance` | `linkedin_ads_set_campaign_status` |
-| **LinkedIn** (páginas de empresa) | `LINKEDIN_ACCESS_TOKEN` | `linkedin_organization_overview`, `linkedin_organization_posts` | `linkedin_publish_post` |
-| **TikTok Ads** | `TIKTOK_ADS_ACCESS_TOKEN` | `tiktok_ads_list_advertisers`*, `tiktok_ads_list_campaigns`, `tiktok_ads_performance` | `tiktok_ads_set_campaign_status` |
-| **TikTok** (orgánico) | `TIKTOK_ACCESS_TOKEN` | `tiktok_profile`, `tiktok_list_videos` | — |
-| **Shopify** | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ACCESS_TOKEN` | `shopify_shop_info`, `shopify_sales_summary` (por día, canal y UTM de primer contacto), `shopify_top_products`, `shopify_graphql_query` (sin mutaciones) | — |
-| **WordPress** | `WORDPRESS_SITE_URL`, `WORDPRESS_USERNAME`, `WORDPRESS_APPLICATION_PASSWORD` | `wordpress_site_info`, `wordpress_list_content`, `wordpress_get_content`, `wordpress_list_comments` | `wordpress_save_content` (borrador por defecto) |
+Si el token se filtra, cambia `MCP_TOKEN` en `.env` y reinicia (`docker compose up -d`).
 
-\* Solo si además se configuran `TIKTOK_ADS_APP_ID` y `TIKTOK_ADS_APP_SECRET`.
+## API REST
 
-Las herramientas de rendimiento devuelven métricas normalizadas (gasto, impresiones, clics, conversiones, valor) y KPIs
-calculados: **CTR, CPC, CPA y ROAS**. Si no indicas fechas, el rango por defecto son los últimos 30 días completos.
+Todas las rutas `/api` piden la cabecera `X-API-Key`. La documentación interactiva está en `/docs`.
 
-`ads_cross_platform_summary` consulta en paralelo todas las plataformas de anuncios configuradas, calcula el reparto
-del gasto y totales combinados **agrupados por moneda** (nunca suma monedas distintas). Si una plataforma falla, el
-resto se devuelve igualmente y el error aparece en `errors`.
-
-## Seguridad y privacidad
-
-- **Escrituras desactivadas por defecto.** Publicar, pausar campañas o editar WordPress exige `MCP_ALLOW_WRITES=true`
-  **y** el argumento `confirm=true`, que Claude solo debe enviar tras tu aprobación explícita. Las herramientas llevan
-  las anotaciones MCP `readOnlyHint` / `destructiveHint` para que el cliente pida confirmación.
-- **Credenciales solo en variables de entorno.** Nunca se escriben a disco ni se devuelven a Claude. Los mensajes de
-  error se depuran (tokens, cabeceras `Bearer`, `access_token=`). Los tokens de página de Facebook se guardan solo en memoria.
-- **Sin datos personales de clientes.** `shopify_sales_summary` no pide emails, nombres, teléfonos ni direcciones.
-  `shopify_graphql_query` y `wordpress_list_comments` eliminan esos campos (y enmascaran emails en texto libre) antes de
-  entregarlos a Claude.
-- **Consultas acotadas.** GAQL solo `SELECT`; GraphQL de Shopify sin `mutation`/`subscription`; límites de filas y paginación.
-- Usa tokens con el **mínimo de permisos** necesario (p. ej. usuario del sistema de Meta con acceso solo a los activos
-  del cliente; app privada de Shopify con `read_orders` y `read_products`).
-
-## Cómo obtener las credenciales
-
-| Plataforma | Dónde | Permisos / scopes |
+| Método | Ruta | Para qué |
 |---|---|---|
-| Google Ads | Developer token en Centro de API de la MCC; cliente OAuth en Google Cloud; refresh token con el flujo OAuth (`https://www.googleapis.com/auth/adwords`) | Acceso básico o estándar del developer token |
-| Meta | Business Manager → Usuarios del sistema → Generar token | `ads_read`, `ads_management`*, `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`*, `read_insights`, `instagram_basic`, `instagram_manage_insights`, `instagram_content_publish`*, `business_management` |
-| LinkedIn | App en developer.linkedin.com con productos *Advertising API* y *Community Management API* | `r_ads`, `r_ads_reporting`, `rw_ads`*, `r_organization_social`, `w_organization_social`*, `rw_organization_admin` |
-| TikTok Ads | TikTok for Business Developers → app → token de anunciante | Ads Management, Reporting |
-| TikTok | developers.tiktok.com → Login Kit + Display API | `user.info.basic`, `user.info.stats`, `video.list` |
-| Shopify | Admin → Configuración → Apps → Desarrollar apps → token de Admin API | `read_orders`, `read_products` (`read_all_orders` para >60 días) |
-| WordPress | Usuarios → Perfil → Contraseñas de aplicación (requiere HTTPS) | Rol Editor o superior para crear contenido |
+| GET | `/api/catalogo` | Plataformas, acciones y salvaguardas |
+| POST | `/api/oauth/{login}/enlace` | Enlace OAuth de un solo uso |
+| POST | `/api/credenciales/manual` | Guardar credenciales manuales |
+| GET | `/api/credenciales/{id}/cuentas` | Cuentas accesibles con una credencial |
+| POST / GET | `/api/conexiones` | Vincular cuenta a cliente / listar |
+| GET | `/api/conexiones/{id}/metricas?desde&hasta` | Métricas normalizadas |
+| GET | `/api/conexiones/{id}/contenido` | Campañas, posts, productos o entradas |
+| GET | `/api/clientes/{cliente}/resumen?desde&hasta` | Totales por plataforma, ventas y MER |
+| POST | `/api/acciones` | Proponer acción (vista previa) |
+| POST | `/api/acciones/{token}/confirmar` | Ejecutar |
+| GET | `/api/auditoria` | Registro de actividad |
 
-\* Solo necesarios para las herramientas de escritura.
+## Mantenimiento
 
-### Versiones de API
+- **Versiones de API**: están todas en `.env` (`META_VERSION`, `GOOGLE_ADS_VERSION`, `LINKEDIN_VERSION`, `SHOPIFY_VERSION`…). Meta, Google y LinkedIn retiran versiones cada pocos meses: revísalas cada trimestre.
+- **Tokens que caducan**: Meta (60 días con login normal; usa un usuario del sistema para evitarlo) y LinkedIn (60 días si tu app no tiene refresh token). El panel marca en rojo las credenciales que caducan en menos de 7 días. Google, TikTok y Shopify se renuevan solos.
+- **Pruebas**: `pip install -r requirements-dev.txt && pytest`.
 
-Las plataformas retiran versiones con frecuencia. Todas son configurables: `GOOGLE_ADS_API_VERSION` (por defecto `v22`),
-`META_API_VERSION` (`v24.0`), `LINKEDIN_API_VERSION` (`202510`), `TIKTOK_ADS_API_VERSION` (`v1.3`) y
-`SHOPIFY_API_VERSION` (`2026-10`). Si una plataforma responde que la versión está obsoleta, sube la variable a la versión
-vigente sin tocar código. Lo mismo con los nombres de métricas de insights de Facebook e Instagram: se pueden pasar en
-el argumento `metrics`.
+## Límites conocidos
 
-## Desarrollo
-
-```bash
-npm run typecheck   # TypeScript estricto
-npm test            # tests con fetch simulado (sin llamadas reales) + flujo OAuth completo
-npm run build
-node scripts/smoke.mjs   # arranca el servidor compilado (stdio y HTTP) y lista herramientas
-```
-
-GitHub Actions ejecuta typecheck, tests, build y smoke test en Node 20, 22 y 24, y construye y prueba la imagen Docker, en cada push a `main` y en cada pull request.
-
-Estructura:
-
-```
-src/
-  index.ts            arranque (stdio o --http)
-  httpServer.ts       modo remoto: Streamable HTTP + OAuth
-  auth.ts             servidor OAuth sin estado (un propietario)
-  server.ts           registro de conectores + connectors_status
-  config.ts           lectura de variables de entorno
-  http.ts             cliente HTTP con timeout y depuración de secretos
-  privacy.ts          eliminación de datos personales
-  util.ts             registro de herramientas, control de escrituras, fechas y KPIs
-  connectors/
-    googleAds.ts  meta.ts (Ads + Facebook + Instagram)  linkedin.ts (Ads + orgánico)
-    tiktok.ts (Ads + orgánico)  shopify.ts  wordpress.ts  crossPlatform.ts
-test/                 tests con cliente MCP en memoria
-```
-
-Para añadir una plataforma: crea `src/connectors/<plataforma>.ts` con una función `register<Plataforma>(server, ctx)`
-que use `registerTool`, añade su configuración en `config.ts` y su fila en `connectorStatus` de `server.ts`.
-
-## Limitaciones conocidas
-
-- Los tests usan respuestas simuladas; antes de producción valida cada conector con una cuenta real (sobre todo
-  nombres de métricas de insights, que Meta y LinkedIn cambian entre versiones).
-- TikTok orgánico es solo lectura: la publicación por API exige una app auditada por TikTok.
-- Las conversiones de cada plataforma siguen su propio modelo de atribución y no se deduplican entre sí.
-- En modo remoto, un código de autorización ya usado se rechaza solo dentro de la misma instancia; si escalas a varias
-  instancias, un código robado podría canjearse una segunda vez en otra durante sus 5 minutos de vida (PKCE sigue
-  impidiendo que lo use quien no tenga el `code_verifier`).
-- Modo remoto pensado para un único propietario (una contraseña). Para varios usuarios haría falta un proveedor de
-  identidad externo.
+- Las cuentas de publicidad solo se gestionan a nivel de estado y presupuesto diario. Crear campañas no está incluido.
+- Con la app de TikTok sin auditar, TikTok publica todos los vídeos como privados.
+- Meta ha retirado varias métricas de página en 2026. Si una métrica ya no existe, se indica en `notas` y el resto se devuelve igual. Puedes pedir otras con el parámetro `metricas`.
+- WordPress no guarda visitas. Para tráfico hace falta GA4 o Search Console, que no están en este conector.
+- Shopify devuelve solo los últimos 60 días de pedidos si la app no tiene el permiso `read_all_orders`.

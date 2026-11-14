@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conector · Marketificial</title>
+<style>
+  :root { --tinta:#14161a; --suave:#5b6170; --linea:#e3e5ea; --fondo:#f7f7f9; --acento:#3d5afe; --ok:#1e8e5a; --mal:#c62828; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--tinta); background:var(--fondo); }
+  header { background:#fff; border-bottom:1px solid var(--linea); padding:14px 24px; display:flex; align-items:center; gap:12px; }
+  header b { font-size:17px; } header span { color:var(--suave); }
+  main { max-width:1080px; margin:0 auto; padding:24px; }
+  section { background:#fff; border:1px solid var(--linea); border-radius:10px; padding:20px; margin-bottom:20px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .rejilla { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+  .tarjeta { border:1px solid var(--linea); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px; }
+  .tarjeta small { color:var(--suave); }
+  button { font:inherit; border:1px solid var(--acento); background:var(--acento); color:#fff; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button.sec { background:#fff; color:var(--acento); }
+  button.peligro { background:#fff; color:var(--mal); border-color:var(--mal); }
+  button:disabled { opacity:.5; cursor:default; }
+  input, select { font:inherit; padding:6px 8px; border:1px solid var(--linea); border-radius:6px; width:100%; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--linea); vertical-align:top; }
+  th { color:var(--suave); font-weight:600; }
+  code { font-size:12px; background:var(--fondo); padding:1px 5px; border-radius:4px; }
+  .etq { display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; background:var(--fondo); border:1px solid var(--linea); }
+  .ok { color:var(--ok); } .mal { color:var(--mal); }
+  #aviso { position:fixed; bottom:20px; right:20px; max-width:420px; padding:12px 16px; border-radius:8px; background:var(--tinta); color:#fff; display:none; }
+  .fila { display:flex; gap:8px; align-items:center; }
+  .oculto { display:none; }
+</style>
+</head>
+<body>
+<header><b>Conector Marketificial</b><span>Publicidad, redes, Shopify y WordPress</span>
+  <span style="flex:1"></span><button class="sec oculto" id="salir">Salir</button></header>
+<main>
+  <section id="acceso">
+    <h2>Acceso</h2>
+    <div class="fila" style="max-width:520px">
+      <input id="clave" type="password" placeholder="API_KEY del servidor" autocomplete="off">
+      <button id="entrar">Entrar</button>
+    </div>
+    <p><small>La clave se guarda solo en esta pestaña del navegador.</small></p>
+  </section>
+
+  <div id="app" class="oculto">
+    <section id="vincular" class="oculto">
+      <h2>Vincular cuentas a un cliente</h2>
+      <p><small>Marca las cuentas que quieres usar y escribe el cliente al que pertenecen (por ejemplo <code>echaleku</code>).</small></p>
+      <div class="fila" style="max-width:420px;margin-bottom:10px"><input id="cliente" placeholder="Cliente"></div>
+      <table><thead><tr><th></th><th>Plataforma</th><th>Cuenta</th><th>ID</th><th>Ya vinculada a</th></tr></thead><tbody id="cuentas"></tbody></table>
+      <p><button id="btn-vincular">Vincular seleccionadas</button></p>
+    </section>
+
+    <section>
+      <h2>Conectar una plataforma</h2>
+      <div class="rejilla" id="logins"></div>
+    </section>
+
+    <section>
+      <h2>Cuentas conectadas</h2>
+      <table><thead><tr><th>Cliente</th><th>Plataforma</th><th>Cuenta</th><th>conexion_id</th><th></th></tr></thead><tbody id="conexiones"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Credenciales guardadas</h2>
+      <table><thead><tr><th>Login</th><th>Etiqueta</th><th>Caduca</th><th>ID</th><th></th></tr></thead><tbody id="credenciales"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Acciones pendientes de confirmar</h2>
+      <table><thead><tr><th>Creada</th><th>Resumen</th><th>Caduca</th><th></th></tr></thead><tbody id="acciones"></tbody></table>
+    </section>
+
+    <section>
+      <h2>Actividad reciente</h2>
+      <table><thead><tr><th>Fecha</th><th>Origen</th><th>Evento</th><th>Plataforma</th><th></th></tr></thead><tbody id="auditoria"></tbody></table>
+    </section>
+  </div>
+</main>
+<div id="aviso"></div>
+<script>
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...hijos) => { const e = document.createElement(tag); Object.assign(e, props); hijos.forEach(h => e.append(h)); return e; };
+const NOMBRES = {meta_ads:"Meta Ads", google_ads:"Google Ads", linkedin_ads:"LinkedIn Ads", tiktok_ads:"TikTok Ads", facebook:"Página de Facebook", instagram:"Instagram", tiktok:"TikTok", linkedin:"LinkedIn", shopify:"Shopify", wordpress:"WordPress"};
+let clave = sessionStorage.getItem("clave") || "";
+
+function aviso(t, mal) { const a = $("#aviso"); a.textContent = t; a.style.background = mal ? "var(--mal)" : "var(--tinta)"; a.style.display = "block"; clearTimeout(a._t); a._t = setTimeout(() => a.style.display = "none", 6000); }
+
+async function api(ruta, opts = {}) {
+  const r = await fetch("/api" + ruta, {...opts, headers: {"X-API-Key": clave, "Content-Type": "application/json", ...(opts.headers || {})}});
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 401) { sessionStorage.removeItem("clave"); location.reload(); }
+  if (!r.ok) throw new Error(d.error || d.detail || ("HTTP " + r.status));
+  return d;
+}
+
+async function entrar() {
+  clave = clave || $("#clave").value.trim();
+  try { await api("/catalogo"); } catch (e) { clave = ""; aviso("Clave incorrecta", true); return; }
+  sessionStorage.setItem("clave", clave);
+  $("#acceso").classList.add("oculto"); $("#app").classList.remove("oculto"); $("#salir").classList.remove("oculto");
+  cargar();
+}
+
+async function cargar() {
+  const cat = await api("/catalogo");
+  pintarLogins(cat.logins);
+  const cred = new URLSearchParams(location.search).get("credencial");
+  if (cred) pintarCuentas(cred);
+  pintarConexiones(); pintarCredenciales(); pintarAcciones(); pintarAuditoria();
+}
+
+function pintarLogins(logins) {
+  const cont = $("#logins"); cont.replaceChildren();
+  for (const l of logins) {
+    const t = el("div", {className: "tarjeta"}, el("b", {textContent: l.nombre}),
+      el("small", {textContent: l.plataformas.map(p => NOMBRES[p]).join(" · ")}));
+    if (l.oauth) {
+      if (!l.configurado) t.append(el("small", {className: "mal", textContent: "Faltan las claves de la app en el .env"}));
+      let tienda;
+      if (l.pide_tienda) { tienda = el("input", {placeholder: "mitienda.myshopify.com"}); t.append(tienda); }
+      const b = el("button", {textContent: "Conectar con " + l.nombre.split(" ")[0], disabled: !l.configurado});
+      b.onclick = async () => {
+        try {
+          const q = tienda ? "?tienda=" + encodeURIComponent(tienda.value.trim()) : "";
+          const r = await api(`/oauth/${l.id}/enlace${q}`, {method: "POST"});
+          location.href = r.url;
+        } catch (e) { aviso(e.message, true); }
+      };
+      t.append(b);
+    }
+    if (Object.keys(l.campos_manuales || {}).length) {
+      const det = el("details"); det.append(el("summary", {textContent: l.oauth ? "Otra forma: credenciales manuales" : "Introducir credenciales"}));
+      const campos = {};
+      for (const [k, ayuda] of Object.entries(l.campos_manuales)) {
+        const opcional = (l.campos_opcionales || []).includes(k);
+        campos[k] = el("input", {placeholder: ayuda + (opcional ? " (opcional)" : ""), type: /secret|token|contrasena/.test(k) ? "password" : "text", autocomplete: "off"});
+        det.append(el("div", {style: "margin-top:6px"}, el("small", {textContent: k}), campos[k]));
+      }
+      const g = el("button", {textContent: "Guardar", className: "sec", style: "margin-top:8px"});
+      g.onclick = async () => {
+        const datos = Object.fromEntries(Object.entries(campos).map(([k, i]) => [k, i.value.trim()]));
+        try {
+          const r = await api("/credenciales/manual", {method: "POST", body: JSON.stringify({login: l.id, datos})});
+          Object.values(campos).forEach(i => i.value = "");
+          history.replaceState(null, "", "?credencial=" + r.credencial_id); pintarCuentas(r.credencial_id); pintarCredenciales();
+          aviso("Credencial guardada. Ahora vincula las cuentas.");
+        } catch (e) { aviso(e.message, true); }
+      };
+      det.append(g); t.append(det);
+    }
+    cont.append(t);
+  }
+}
+
+async function pintarCuentas(cred) {
+  const s = $("#vincular"); s.classList.remove("oculto"); s.dataset.cred = cred;
+  const tb = $("#cuentas"); tb.replaceChildren(el("tr", {}, el("td", {colSpan: 5, textContent: "Cargando cuentas…"})));
+  try {
+    const cuentas = await api(`/credenciales/${cred}/cuentas`);
+    tb.replaceChildren();
+    if (!cuentas.length) tb.append(el("tr", {}, el("td", {colSpan: 5, textContent: "No hay cuentas accesibles con este acceso."})));
+    for (const c of cuentas) {
+      const chk = el("input", {type: "checkbox", style: "width:auto"}); chk.dataset.p = c.plataforma; chk.dataset.id = c.cuenta_id;
+      tb.append(el("tr", {}, el("td", {}, chk), el("td", {textContent: NOMBRES[c.plataforma] || c.plataforma}),
+        el("td", {textContent: c.nombre || ""}), el("td", {}, el("code", {textContent: c.cuenta_id})), el("td", {textContent: c.vinculada_a || "—"})));
+    }
+    s.scrollIntoView({behavior: "smooth"});
+  } catch (e) { tb.replaceChildren(el("tr", {}, el("td", {colSpan: 5, className: "mal", textContent: e.message}))); }
+}
+
+$("#btn-vincular").onclick = async () => {
+  const cliente = $("#cliente").value.trim(); const cred = $("#vincular").dataset.cred;
+  const marcadas = [...document.querySelectorAll("#cuentas input:checked")];
+  if (!cliente || !marcadas.length) return aviso("Escribe el cliente y marca al menos una cuenta", true);
+  let ok = 0;
+  for (const m of marcadas) {
+    try { await api("/conexiones", {method: "POST", body: JSON.stringify({credencial_id: cred, cliente, plataforma: m.dataset.p, cuenta_id: m.dataset.id})}); ok++; }
+    catch (e) { aviso(e.message, true); }
+  }
+  aviso(`${ok} cuenta(s) vinculadas a ${cliente}`); pintarConexiones(); pintarCuentas(cred);
+};
+
+async function pintarConexiones() {
+  const tb = $("#conexiones"); tb.replaceChildren();
+  const lista = await api("/conexiones");
+  if (!lista.length) tb.append(el("tr", {}, el("td", {colSpan: 5, textContent: "Todavía no hay cuentas conectadas."})));
+  for (const c of lista) {
+    const b = el("button", {className: "peligro", textContent: "Desvincular"});
+    b.onclick = async () => { if (!confirm(`¿Desvincular ${c.nombre || c.cuenta_id} de ${c.cliente}?`)) return; await api(`/conexiones/${c.id}`, {method: "DELETE"}); pintarConexiones(); };
+    tb.append(el("tr", {}, el("td", {textContent: c.cliente}), el("td", {textContent: NOMBRES[c.plataforma] || c.plataforma}),
+      el("td", {textContent: c.nombre || c.cuenta_id}), el("td", {}, el("code", {textContent: c.id})), el("td", {}, b)));
+  }
+}
+
+async function pintarCredenciales() {
+  const tb = $("#credenciales"); tb.replaceChildren();
+  for (const c of await api("/credenciales")) {
+    const ver = el("button", {className: "sec", textContent: "Ver cuentas"}); ver.onclick = () => { history.replaceState(null, "", "?credencial=" + c.id); pintarCuentas(c.id); };
+    const borrar = el("button", {className: "peligro", textContent: "Borrar"});
+    borrar.onclick = async () => { if (!confirm("Se borrarán también sus conexiones. ¿Seguir?")) return; await api(`/credenciales/${c.id}`, {method: "DELETE"}); pintarCredenciales(); pintarConexiones(); };
+    const cad = c.caduca ? new Date(c.caduca) : null;
+    const tdCad = el("td", {textContent: cad ? cad.toLocaleString("es-ES") : "No caduca / se renueva"});
+    if (cad && cad - Date.now() < 7 * 864e5) tdCad.className = "mal";
+    tb.append(el("tr", {}, el("td", {textContent: c.login}), el("td", {textContent: c.etiqueta || ""}), tdCad,
+      el("td", {}, el("code", {textContent: c.id})), el("td", {}, el("div", {className: "fila"}, ver, borrar))));
+  }
+}
+
+async function pintarAcciones() {
+  const tb = $("#acciones"); tb.replaceChildren();
+  const lista = await api("/acciones?estado=pendiente");
+  if (!lista.length) tb.append(el("tr", {}, el("td", {colSpan: 4, textContent: "Nada pendiente."})));
+  for (const a of lista) {
+    const conf = el("button", {textContent: "Confirmar"});
+    conf.onclick = async () => { if (!confirm("Se ejecutará en la plataforma real:\n\n" + (a.vista_previa.resumen || a.accion))) return;
+      try { await api(`/acciones/${a.token}/confirmar`, {method: "POST"}); aviso("Hecho"); } catch (e) { aviso(e.message, true); } pintarAcciones(); pintarAuditoria(); };
+    const canc = el("button", {className: "sec", textContent: "Cancelar"});
+    canc.onclick = async () => { await api(`/acciones/${a.token}/cancelar`, {method: "POST"}); pintarAcciones(); };
+    tb.append(el("tr", {}, el("td", {textContent: new Date(a.creado).toLocaleString("es-ES")}),
+      el("td", {textContent: a.vista_previa.resumen || a.accion}), el("td", {textContent: new Date(a.caduca).toLocaleTimeString("es-ES")}),
+      el("td", {}, el("div", {className: "fila"}, conf, canc))));
+  }
+}
+
+async function pintarAuditoria() {
+  const tb = $("#auditoria"); tb.replaceChildren();
+  for (const e of await api("/auditoria?limite=20")) {
+    tb.append(el("tr", {}, el("td", {textContent: new Date(e.fecha).toLocaleString("es-ES")}), el("td", {textContent: e.origen || ""}),
+      el("td", {textContent: e.evento}), el("td", {textContent: e.plataforma || ""}),
+      el("td", {className: e.ok ? "ok" : "mal", textContent: e.ok ? "OK" : "Error"})));
+  }
+}
+
+$("#entrar").onclick = entrar;
+$("#clave").onkeydown = e => { if (e.key === "Enter") entrar(); };
+$("#salir").onclick = () => { sessionStorage.removeItem("clave"); location.href = "/panel"; };
+if (clave) entrar();
+</script>
+</body>
+</html>
