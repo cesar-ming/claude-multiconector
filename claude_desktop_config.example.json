@@ -2,7 +2,7 @@
   "mcpServers": {
     "multiconector": {
       "command": "node",
-      "args": ["/RUTA/ABSOLUTA/revenue-guard/mcp-multiconnector/dist/index.js"],
+      "args": ["/RUTA/ABSOLUTA/claude-multiconector/dist/index.js"],
       "env": {
         "MCP_ALLOW_WRITES": "false",
         "GOOGLE_ADS_DEVELOPER_TOKEN": "",

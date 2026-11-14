@@ -15,7 +15,8 @@ Con él puedes pedirle a Claude cosas como:
 Requisitos: Node.js 20 o superior.
 
 ```bash
-cd mcp-multiconnector
+git clone https://github.com/cesar-ming/claude-multiconector.git
+cd claude-multiconector
 npm install
 npm run build
 ```
@@ -31,7 +32,7 @@ y solo las credenciales de las plataformas que uses. Reinicia Claude.
 ```bash
 claude mcp add multiconector \
   -e META_ACCESS_TOKEN=... -e SHOPIFY_SHOP_DOMAIN=mitienda.myshopify.com -e SHOPIFY_ACCESS_TOKEN=... \
-  -- node /ruta/absoluta/mcp-multiconnector/dist/index.js
+  -- node /ruta/absoluta/claude-multiconector/dist/index.js
 ```
 
 Después pregunta a Claude «estado de los conectores» (herramienta `connectors_status`) para ver qué está activo.
