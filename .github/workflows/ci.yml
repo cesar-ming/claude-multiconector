@@ -33,3 +33,24 @@ jobs:
       - run: npm run build
       - name: Smoke test (server starts and lists tools over stdio)
         run: node scripts/smoke.mjs
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t multiconector:ci .
+      - name: Run image and check health + auth
+        run: |
+          KEY=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40)
+          docker run -d --name mc -p 8080:8080 -e MCP_API_KEY="$KEY" multiconector:ci
+          for i in $(seq 1 30); do curl -fsS localhost:8080/healthz && break; sleep 1; done
+          echo
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp \
+            -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = "200"
+          docker logs mc

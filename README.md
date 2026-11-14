@@ -39,6 +39,88 @@ claude mcp add multiconector \
 
 Después pregunta a Claude «estado de los conectores» (herramienta `connectors_status`) para ver qué está activo.
 
+## Modo remoto: claude.ai, app del iPhone y Android
+
+En modo HTTP el multiconector se despliega en un servidor y se añade a claude.ai como **conector personalizado**.
+Una vez añadido en la web, aparece también en las apps de Claude para iPhone, Android y escritorio.
+
+```
+Claude (web / iPhone / escritorio) ──OAuth──▶  https://tu-servidor/mcp  ──▶  Google, Meta, LinkedIn, TikTok, Shopify, WordPress
+```
+
+### Seguridad del modo remoto
+
+- **OAuth 2.1 con PKCE y registro dinámico de clientes**, que es lo que usa claude.ai. Al conectar, se abre una página
+  donde introduces tu contraseña de propietario (`MCP_OWNER_PASSWORD`); solo entonces Claude recibe un token.
+- **Sin base de datos**: clientes, códigos y tokens van cifrados y firmados con AES-256-GCM (clave derivada de
+  `MCP_TOKEN_SECRET`). Sobrevive a reinicios y a escalado a cero. Tokens de acceso de 1 hora y de refresco de 30 días.
+- **Revocar todo**: cambia `MCP_OWNER_PASSWORD` o `MCP_TOKEN_SECRET` y todos los tokens emitidos dejan de valer.
+- **Clave de API opcional** (`MCP_API_KEY`) para Claude Code o scripts que envían la cabecera `Authorization: Bearer`.
+- El servidor **no arranca sin autenticación**, exige HTTPS en `MCP_PUBLIC_URL`, secretos de longitud mínima y limita
+  los intentos de contraseña (10 cada 15 minutos por IP).
+
+### Variables del modo remoto
+
+| Variable | Obligatoria | Descripción |
+|---|---|---|
+| `MCP_TRANSPORT=http` | sí (o `--http`) | Activa el modo HTTP. La imagen Docker ya lo trae activado. |
+| `MCP_PUBLIC_URL` | para OAuth | URL pública del servicio, p. ej. `https://multiconector-xxxx.run.app` |
+| `MCP_OWNER_PASSWORD` | para OAuth | Tu contraseña para autorizar a Claude (mínimo 12 caracteres). |
+| `MCP_TOKEN_SECRET` | para OAuth | Secreto aleatorio de 32+ caracteres: `openssl rand -base64 48` |
+| `MCP_API_KEY` | opcional | Clave para clientes con cabeceras (32+ caracteres). |
+| `PORT` | no | Puerto (por defecto 8080). |
+| `MCP_TRUST_PROXY` | no | Saltos de proxy de confianza (por defecto 1, correcto en Cloud Run, Railway y Render). |
+
+Más las credenciales de cada plataforma, igual que en modo local.
+
+### Desplegar en Google Cloud Run
+
+```bash
+# 1. Guarda los secretos en Secret Manager (una vez)
+printf '%s' 'tu-contraseña-larga' | gcloud secrets create mc-owner-password --data-file=-
+openssl rand -base64 48 | tr -d '\n' | gcloud secrets create mc-token-secret --data-file=-
+printf '%s' 'EAAB...' | gcloud secrets create mc-meta-token --data-file=-   # y así con cada credencial
+
+# 2. Calcula la URL que tendrá el servicio (Cloud Run la forma con el número de proyecto)
+REGION=europe-west1
+PROJECT_NUMBER=$(gcloud projects describe "$(gcloud config get-value project)" --format='value(projectNumber)')
+URL="https://claude-multiconector-${PROJECT_NUMBER}.${REGION}.run.app"
+
+# 3. Despliega desde el código (Cloud Build usa el Dockerfile)
+gcloud run deploy claude-multiconector --source . --region "$REGION" \
+  --allow-unauthenticated \
+  --set-env-vars MCP_PUBLIC_URL="$URL" \
+  --set-secrets MCP_OWNER_PASSWORD=mc-owner-password:latest,MCP_TOKEN_SECRET=mc-token-secret:latest,META_ACCESS_TOKEN=mc-meta-token:latest
+```
+
+Si `gcloud` muestra al final una URL distinta de `$URL` (formato antiguo `...-xxxx-ew.a.run.app`), actualiza la variable:
+`gcloud run services update claude-multiconector --region "$REGION" --update-env-vars MCP_PUBLIC_URL=https://...`
+
+La cuenta de servicio de Cloud Run necesita el rol *Secret Manager Secret Accessor* sobre esos secretos (gcloud lo
+ofrece la primera vez). `--allow-unauthenticated` es necesario porque la autenticación la hace el propio servidor con OAuth. Railway, Render
+o Fly.io funcionan igual: despliegan el `Dockerfile` y solo hay que definir las mismas variables.
+
+Comprueba que responde: `https://tu-servidor/healthz` debe devolver `{"ok":true,"oauth":true,...}`.
+
+### Añadirlo a Claude
+
+**claude.ai (y desde ahí, el iPhone):** Ajustes → Conectores → *Añadir conector personalizado* → URL
+`https://tu-servidor/mcp` → *Conectar*. Se abrirá la página de autorización: introduce tu `MCP_OWNER_PASSWORD`. Después
+el conector está disponible en la app del iPhone con la misma cuenta. (Los conectores personalizados dependen del plan
+de Claude; en cuentas de equipo puede tener que añadirlo un administrador.)
+
+**Claude Code con clave de API:**
+
+```bash
+claude mcp add --transport http multiconector https://tu-servidor/mcp --header "Authorization: Bearer $MCP_API_KEY"
+```
+
+**Probarlo en local:**
+
+```bash
+MCP_API_KEY=$(openssl rand -hex 24) META_ACCESS_TOKEN=... npm run build && node dist/index.js --http
+```
+
 ## Conectores y herramientas
 
 Cada conector se activa solo si están sus variables de entorno (ver [`.env.example`](.env.example)). Las herramientas de
@@ -107,18 +189,20 @@ el argumento `metrics`.
 
 ```bash
 npm run typecheck   # TypeScript estricto
-npm test            # 26 tests con fetch simulado (sin llamadas reales)
+npm test            # tests con fetch simulado (sin llamadas reales) + flujo OAuth completo
 npm run build
-node scripts/smoke.mjs   # arranca el servidor compilado y lista herramientas
+node scripts/smoke.mjs   # arranca el servidor compilado (stdio y HTTP) y lista herramientas
 ```
 
-GitHub Actions ejecuta typecheck, tests, build y smoke test en Node 20, 22 y 24 en cada push a `main` y en cada pull request.
+GitHub Actions ejecuta typecheck, tests, build y smoke test en Node 20, 22 y 24, y construye y prueba la imagen Docker, en cada push a `main` y en cada pull request.
 
 Estructura:
 
 ```
 src/
-  index.ts            arranque stdio
+  index.ts            arranque (stdio o --http)
+  httpServer.ts       modo remoto: Streamable HTTP + OAuth
+  auth.ts             servidor OAuth sin estado (un propietario)
   server.ts           registro de conectores + connectors_status
   config.ts           lectura de variables de entorno
   http.ts             cliente HTTP con timeout y depuración de secretos
@@ -139,4 +223,8 @@ que use `registerTool`, añade su configuración en `config.ts` y su fila en `co
   nombres de métricas de insights, que Meta y LinkedIn cambian entre versiones).
 - TikTok orgánico es solo lectura: la publicación por API exige una app auditada por TikTok.
 - Las conversiones de cada plataforma siguen su propio modelo de atribución y no se deduplican entre sí.
-- Transporte stdio (local). Para usarlo como conector remoto en claude.ai habría que añadir transporte HTTP con OAuth.
+- En modo remoto, un código de autorización ya usado se rechaza solo dentro de la misma instancia; si escalas a varias
+  instancias, un código robado podría canjearse una segunda vez en otra durante sus 5 minutos de vida (PKCE sigue
+  impidiendo que lo use quien no tenga el `code_verifier`).
+- Modo remoto pensado para un único propietario (una contraseña). Para varios usuarios haría falta un proveedor de
+  identidad externo.

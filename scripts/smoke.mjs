@@ -21,3 +21,31 @@ if (!names.includes("meta_ads_performance") || !names.includes("shopify_sales_su
   process.exit(1);
 }
 console.log(`Smoke test OK: ${names.length} tools, connectors: ${configured.join(", ")}`);
+
+// ---- HTTP mode: start with an API key and call tools over Streamable HTTP.
+import { spawn } from "node:child_process";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+const port = 18000 + Math.floor(Math.random() * 1000);
+const apiKey = "smoke-".padEnd(40, "x");
+const child = spawn(process.execPath, ["dist/index.js", "--http"], {
+  env: { PATH: process.env.PATH ?? "", PORT: String(port), MCP_HOST: "127.0.0.1", MCP_API_KEY: apiKey, META_ACCESS_TOKEN: "dummy" },
+  stdio: ["ignore", "inherit", "inherit"],
+});
+try {
+  let healthy = false;
+  for (let i = 0; i < 50 && !healthy; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    healthy = await fetch(`http://127.0.0.1:${port}/healthz`).then((r) => r.ok).catch(() => false);
+  }
+  if (!healthy) throw new Error("HTTP server did not become healthy");
+  const denied = await fetch(`http://127.0.0.1:${port}/mcp`, { method: "POST" });
+  if (denied.status !== 401) throw new Error(`expected 401 without token, got ${denied.status}`);
+  const http = new Client({ name: "smoke-http", version: "1.0.0" });
+  await http.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${apiKey}` } } }));
+  const httpTools = (await http.listTools()).tools.length;
+  await http.close();
+  console.log(`HTTP smoke test OK: ${httpTools} tools`);
+} finally {
+  child.kill();
+}
