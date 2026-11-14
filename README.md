@@ -1,5 +1,7 @@
 # Multiconector MCP para Claude
 
+[![CI](https://github.com/cesar-ming/claude-multiconector/actions/workflows/ci.yml/badge.svg)](https://github.com/cesar-ming/claude-multiconector/actions/workflows/ci.yml)
+
 Servidor [MCP](https://modelcontextprotocol.io) que conecta Claude con **Google Ads, Meta Ads, LinkedIn Ads, TikTok Ads, Facebook, Instagram, LinkedIn, TikTok, Shopify y WordPress** desde un único conector.
 
 Con él puedes pedirle a Claude cosas como:
@@ -107,7 +109,10 @@ el argumento `metrics`.
 npm run typecheck   # TypeScript estricto
 npm test            # 26 tests con fetch simulado (sin llamadas reales)
 npm run build
+node scripts/smoke.mjs   # arranca el servidor compilado y lista herramientas
 ```
+
+GitHub Actions ejecuta typecheck, tests, build y smoke test en Node 20, 22 y 24 en cada push a `main` y en cada pull request.
 
 Estructura:
 
