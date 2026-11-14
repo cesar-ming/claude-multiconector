@@ -31,7 +31,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - name: Smoke test (server starts and lists tools over stdio)
+      - name: Smoke test (stdio and HTTP modes)
         run: node scripts/smoke.mjs
 
   docker:
