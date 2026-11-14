@@ -20,4 +20,4 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
-      - run: bash -n deploy/clouding/migrar.sh
+      - run: bash -n deploy/clouding/userdata.sh

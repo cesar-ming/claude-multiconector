@@ -34,23 +34,21 @@ Todas las métricas de publicidad salen con el mismo formato:
 - **Credenciales cifradas** en la base de datos (Fernet) y **registro de auditoría** de cada conexión, propuesta y ejecución, sin tokens ni secretos.
 - **Sin datos inventados**: si una métrica no existe o una fuente falla, se devuelve el error o «sin dato», nunca una estimación. Los ingresos atribuidos de cada plataforma no se suman entre sí, y el MER solo se calcula si todas las fuentes responden y comparten moneda.
 
-## Puesta en marcha en el servidor de Clouding (marketificial-mvp)
+## Puesta en marcha en Clouding
 
-El servidor ya tiene Caddy (HTTPS automático) y un temporizador que **cada 5 minutos descarga la rama `main` de este repositorio** y reconstruye el contenedor si hay cambios. Publicar una mejora es tan simple como subirla a `main`.
+El servidor se crea con la API de Clouding pasando [`deploy/clouding/userdata.sh`](deploy/clouding/userdata.sh) como `userData` (sustituyendo `__API_KEY__` y `__MCP_TOKEN__`). En el primer arranque, sin intervención:
 
-Migración inicial, una sola vez, desde la consola del servidor como `root`:
+- instala Docker, fail2ban, actualizaciones automáticas y 2 GB de swap;
+- genera `CLAVE_CIFRADO` en el propio servidor y guarda la configuración en `/opt/marketificial/.env`;
+- arranca Caddy con HTTPS automático para `mcp.marketificial.com` (conector y panel), `marketificial.com` (página provisional) y una dirección provisional `IP-con-guiones.sslip.io`;
+- programa el despliegue continuo: **cada 5 minutos descarga `main` de este repositorio** y reconstruye si hay cambios. Si el repositorio es privado, necesita un token de solo lectura en `/opt/marketificial/github-token`;
+- programa una copia diaria de la base de datos dentro del servidor (30 días).
 
-```bash
-nano /opt/marketificial/github-token     # pega un token de GitHub de solo lectura (Contents: Read-only) y guarda
-chmod 600 /opt/marketificial/github-token
-curl -fsSL -H "Authorization: token $(cat /opt/marketificial/github-token)" \
-  https://raw.githubusercontent.com/cesar-ming/claude-multiconector/main/deploy/clouding/migrar.sh | bash
-cat /root/marketificial-credenciales.txt  # clave del panel y URL del conector para Claude
-```
+Tamaño MVP: 0,5 vCPU, 1 GB de RAM y 10 GB SSD, sin copias de Clouding (unos 3,5 € al mes).
 
-[`deploy/clouding/migrar.sh`](deploy/clouding/migrar.sh) genera los secretos en el propio servidor, añade almacenamiento permanente para la base de datos, programa una copia diaria (30 días) y arranca el conector en `https://mcp.marketificial.com`. Se puede repetir sin perder nada. Guarda `CLAVE_CIFRADO` también fuera del servidor: sin ella no se pueden leer las credenciales guardadas.
+DNS: los registros A de `@`, `www` y `mcp` de `marketificial.com` deben apuntar a la IP del servidor. Caddy pide los certificados en cuanto resuelven.
 
-Las claves de las apps de cada plataforma se añaden en `/opt/marketificial/.env`; después, `cd /opt/marketificial && docker compose up -d multiconector`. Comprueba qué falta con `docker compose exec multiconector python -m app.cli comprobar`, que también muestra las URL de redirección que hay que registrar en cada app.
+Las claves de las apps de cada plataforma van en `/opt/marketificial/.env`; después, `cd /opt/marketificial && docker compose up -d multiconector`. `docker compose exec multiconector python -m app.cli comprobar` muestra qué falta y las URL de redirección de cada app.
 
 Para otro servidor, sirven el `Dockerfile` y `docker-compose.yml` de la raíz detrás de cualquier proxy con HTTPS.
 
