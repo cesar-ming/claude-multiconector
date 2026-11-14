@@ -1,0 +1,31 @@
+{
+  "name": "claude-multiconector",
+  "version": "0.1.0",
+  "description": "MCP server connecting Claude to Google Ads, Meta Ads, LinkedIn Ads, TikTok Ads, Facebook, Instagram, LinkedIn, TikTok, Shopify and WordPress",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json && node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "5.9",
+    "vitest": "^3.2.7"
+  },
+  "type": "module",
+  "bin": {
+    "claude-multiconector": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}
