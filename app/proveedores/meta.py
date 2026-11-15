@@ -150,15 +150,21 @@ class MetaAds(Plataforma):
         return {"filas": filas, "notas": notas}
 
     async def contenido(self, ctx, opciones):
-        campanas = await paginar(ctx.http, ctx.ajustes, f"{ctx.cuenta_id}/campaigns", ctx.datos["access_token"], {
-            "fields": "id,name,status,effective_status,objective,daily_budget,lifetime_budget", "limit": 200},
-            "meta_ads")
+        tipo = opcion(opciones.get("tipo") or "campanas", {
+            "campanas": "campaigns", "campañas": "campaigns", "campaigns": "campaigns",
+            "conjuntos": "adsets", "adsets": "adsets", "anuncios": "ads", "ads": "ads"}, "tipo")
+        campos = {"campaigns": "id,name,status,effective_status,objective,daily_budget,lifetime_budget",
+                  "adsets": "id,name,campaign_id,status,effective_status,optimization_goal,daily_budget,lifetime_budget",
+                  "ads": "id,name,campaign_id,adset_id,status,effective_status"}[tipo]
+        elementos = await paginar(ctx.http, ctx.ajustes, f"{ctx.cuenta_id}/{tipo}", ctx.datos["access_token"],
+                                  {"fields": campos, "limit": 200}, "meta_ads")
         moneda = ctx.extra.get("moneda")
-        for c in campanas:
+        for c in elementos:
             for k in ("daily_budget", "lifetime_budget"):
                 if c.get(k):
                     c[k] = _de_minimo(c[k], moneda)
-        return {"tipo": "campanas", "moneda": moneda, "elementos": campanas}
+        nombre = {"campaigns": "campanas", "adsets": "conjuntos", "ads": "anuncios"}[tipo]
+        return {"tipo": nombre, "moneda": moneda, "elementos": elementos}
 
     def acciones(self):
         return {
@@ -171,6 +177,10 @@ class MetaAds(Plataforma):
                 "Cambia el presupuesto diario de una campaña (CBO) o de un conjunto de anuncios.",
                 {"objeto_id": "ID de la campaña o del conjunto", "importe": "nuevo presupuesto diario en la moneda de la cuenta"},
                 self._prev_presupuesto, self._ejec_presupuesto),
+            "lanzar_campana": Accion(
+                "lanzar_campana", "gestionar",
+                "Crea una campaña completa EN PAUSA (campaña + conjunto de anuncios + anuncio con imagen). "
+                "No gasta nada hasta que se active.", PARAMS_LANZAR, prev_lanzar, ejec_lanzar),
         }
 
     async def _objeto(self, ctx, objeto_id, campos):
@@ -453,3 +463,6 @@ class Instagram(Plataforma):
                 raise ErrorPlataforma("instagram", f"Instagram no pudo procesar el archivo (estado {estado})")
             await asyncio.sleep(5)
         raise ErrorPlataforma("instagram", "El vídeo sigue procesándose tras 5 minutos; reinténtalo más tarde")
+
+
+from .meta_campanas import PARAMS_LANZAR, ejec_lanzar, prev_lanzar  # noqa: E402

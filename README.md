@@ -11,8 +11,8 @@ Está pensado para que **la agencia** conecte las cuentas de sus clientes con su
 
 | Plataforma | Leer | Publicar / gestionar |
 |---|---|---|
-| Meta Ads | Inversión, impresiones, clics, conversiones e ingresos por campaña, conjunto o anuncio y día | Pausar/activar · cambiar presupuesto diario |
-| Google Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
+| Meta Ads | Inversión, impresiones, clics, conversiones e ingresos por campaña, conjunto o anuncio y día · listado de campañas, conjuntos y anuncios | **Lanzar campaña completa en pausa** (campaña + conjunto + anuncio con imagen) · pausar/activar · cambiar presupuesto diario |
+| Google Ads | Igual, por campaña y día · grupos, palabras clave y términos de búsqueda con métricas de 30 días | **Lanzar campaña de búsqueda en pausa** (validada por Google antes de confirmar) · añadir palabras clave y negativas · declarar campañas sin publicidad política de la UE · pausar/activar · cambiar presupuesto diario |
 | LinkedIn Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
 | TikTok Ads | Igual, por campaña y día | Pausar/activar · cambiar presupuesto diario |
 | Página de Facebook | Métricas diarias de la página · publicaciones | Publicar o programar post (texto, enlace o imagen) |
@@ -108,7 +108,8 @@ Todas las rutas `/api` piden la cabecera `X-API-Key`. La documentación interact
 
 ## Límites conocidos
 
-- Las cuentas de publicidad solo se gestionan a nivel de estado y presupuesto diario. Crear campañas no está incluido.
+- Crear campañas: de momento Meta Ads (ventas, clientes potenciales, tráfico, reconocimiento; un conjunto y un anuncio de imagen) y Google Ads (búsqueda). Performance Max, Shopping, TikTok Ads y LinkedIn Ads, pendientes.
+- Toda campaña nueva se crea en pausa; activarla es otra acción con su propia confirmación.
 - Con la app de TikTok sin auditar, TikTok publica todos los vídeos como privados.
 - Meta ha retirado varias métricas de página en 2026. Si una métrica ya no existe, se indica en `notas` y el resto se devuelve igual. Puedes pedir otras con el parámetro `metricas`.
 - WordPress no guarda visitas. Para tráfico hace falta GA4 o Search Console, que no están en este conector.

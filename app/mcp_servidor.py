@@ -86,14 +86,20 @@ def crear_mcp(servicio_dep) -> MCPServer:
         return await seguro(svc().resumen_cliente(cliente, desde, hasta))
 
     @mcp.tool(annotations=LECTURA)
-    async def contenido(conexion_id: str, limite: int = 25) -> dict:
-        """Lista campañas (publicidad), publicaciones (redes), productos (Shopify) o entradas (WordPress) con sus IDs."""
-        return await seguro(svc().contenido(conexion_id, {"limite": limite}))
+    async def contenido(conexion_id: str, tipo: str | None = None, campana_id: str | None = None,
+                        limite: int = 25) -> dict:
+        """Lista elementos con sus IDs: campañas (publicidad), publicaciones (redes), productos (Shopify) o entradas (WordPress).
+        tipo en Meta Ads: campanas | conjuntos | anuncios. En Google Ads: campanas | grupos | palabras_clave |
+        terminos_busqueda (los dos últimos con métricas de 30 días; filtra con campana_id)."""
+        opciones = {k: v for k, v in {"limite": limite, "tipo": tipo, "campana_id": campana_id}.items() if v}
+        return await seguro(svc().contenido(conexion_id, opciones))
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
     async def proponer_accion(conexion_id: str, accion: str, parametros: dict[str, Any]) -> dict:
         """Prepara una acción de publicar o gestionar y devuelve su vista previa con un token. NO ejecuta nada.
-        Acciones: cambiar_estado, cambiar_presupuesto_diario (publicidad); publicar (Facebook, Instagram, LinkedIn);
+        Acciones: cambiar_estado, cambiar_presupuesto_diario (publicidad); lanzar_campana (Meta Ads: campaña +
+        conjunto + anuncio, EN PAUSA); lanzar_campana_busqueda, anadir_palabras_clave, anadir_negativas,
+        declarar_sin_publicidad_politica (Google Ads); publicar (Facebook, Instagram, LinkedIn);
         publicar_video (TikTok); cambiar_estado_producto, crear_producto_borrador (Shopify);
         publicar_entrada, actualizar_entrada (WordPress). Consulta `plataformas` para ver los parámetros."""
         return await seguro(svc().proponer(conexion_id, accion, parametros, "mcp"))

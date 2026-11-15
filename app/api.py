@@ -128,8 +128,9 @@ def crear_api(servicio_dep) -> FastAPI:
         return await svc().metricas(cid, desde, hasta, opciones)
 
     @r.get("/conexiones/{cid}/contenido")
-    async def contenido(cid: str, limite: int = 25):
-        return await svc().contenido(cid, {"limite": limite})
+    async def contenido(cid: str, limite: int = 25, tipo: str | None = None, campana_id: str | None = None):
+        opciones = {k: v for k, v in {"limite": limite, "tipo": tipo, "campana_id": campana_id}.items() if v}
+        return await svc().contenido(cid, opciones)
 
     @r.get("/clientes/{cliente}/resumen")
     async def resumen(cliente: str, desde: str, hasta: str):
